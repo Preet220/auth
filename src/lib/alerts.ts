@@ -142,53 +142,56 @@ async function evaluateBreaches(
   const breaches: BreachResult[] = [];
   const defCategory = resolveCategory(def.category);
 
-  // 1. Weight reconciliation breach
+  // 1. Weight reconciliation breach — only if a matching rule is selected
   const recon = run.reconciliation_result;
   if (recon && recon.matched === false) {
     const delta = typeof recon.delta === 'number' ? recon.delta : 0;
-    // Check if there's a custom weight_reconciliation rule with a tolerance threshold
     const weightRule = rules.find((r) => r.rule_type.toLowerCase().includes('weight') || r.rule_type.toLowerCase().includes('reconciliation'));
-    const tolerance = weightRule?.thresholds?.tolerance != null
-      ? Math.abs(Number(weightRule.thresholds.tolerance))
-      : 0.01;
-    if (Math.abs(delta) > tolerance) {
-      const sev = weightRule ? resolveSeverity(weightRule, weightRule.thresholds) : { level: 'high', category: 'high' };
-      breaches.push({
-        breached: true,
-        severityLevel: sev.level,
-        processCategory: defCategory,
-        message: `Weight reconciliation failed: delta of ${delta.toFixed(2)} kg exceeds tolerance of ${tolerance} kg`,
-        stageIndex: -1,
-        action: ruleAction(weightRule, 'warn'),
-      });
+    if (weightRule) {
+      const tolerance = weightRule.thresholds?.tolerance != null
+        ? Math.abs(Number(weightRule.thresholds.tolerance))
+        : 0.01;
+      if (Math.abs(delta) > tolerance) {
+        const sev = resolveSeverity(weightRule, weightRule.thresholds);
+        breaches.push({
+          breached: true,
+          severityLevel: sev.level,
+          processCategory: defCategory,
+          message: `Weight reconciliation failed: delta of ${delta.toFixed(2)} kg exceeds tolerance of ${tolerance} kg`,
+          stageIndex: -1,
+          action: ruleAction(weightRule, 'warn'),
+        });
+      }
     }
   }
 
-  // 2. Time limit breach
+  // 2. Time limit breach — only if a matching rule is selected
   if (run.started_at && run.completed_at) {
     const start = new Date(run.started_at).getTime();
     const end = new Date(run.completed_at).getTime();
     const elapsedMin = (end - start) / 60000;
     const timeRule = rules.find((r) => r.rule_type.toLowerCase().includes('time') || r.rule_type.toLowerCase().includes('duration'));
-    const limit = timeRule?.thresholds?.max_minutes != null
-      ? Number(timeRule.thresholds.max_minutes)
-      : timeRule?.thresholds?.limit != null
-        ? Number(timeRule.thresholds.limit)
-        : null;
-    if (limit != null && elapsedMin > limit) {
-      const sev = timeRule ? resolveSeverity(timeRule, timeRule.thresholds) : { level: 'medium', category: 'moderate' };
-      breaches.push({
-        breached: true,
-        severityLevel: sev.level,
-        processCategory: defCategory,
-        message: `Process exceeded time limit: ${elapsedMin.toFixed(1)} min (limit: ${limit} min)`,
-        stageIndex: -1,
-        action: ruleAction(timeRule, 'alert'),
-      });
+    if (timeRule) {
+      const limit = timeRule.thresholds?.max_minutes != null
+        ? Number(timeRule.thresholds.max_minutes)
+        : timeRule.thresholds?.limit != null
+          ? Number(timeRule.thresholds.limit)
+          : null;
+      if (limit != null && elapsedMin > limit) {
+        const sev = resolveSeverity(timeRule, timeRule.thresholds);
+        breaches.push({
+          breached: true,
+          severityLevel: sev.level,
+          processCategory: defCategory,
+          message: `Process exceeded time limit: ${elapsedMin.toFixed(1)} min (limit: ${limit} min)`,
+          stageIndex: -1,
+          action: ruleAction(timeRule, 'alert'),
+        });
+      }
     }
   }
 
-  // 3. Duplicate seal detection
+  // 3. Duplicate seal detection — only if a matching rule is selected
   if (run.batch_items && run.batch_items.length > 0) {
     const sealValues = run.batch_items.map((b) => b.seal_qr_value).filter(Boolean) as string[];
     const seen = new Set<string>();
@@ -198,10 +201,11 @@ async function evaluateBreaches(
       seen.add(s);
     }
     const dupSealRule = rules.find((r) => r.rule_type.toLowerCase().includes('duplicate_seal') || r.rule_type.toLowerCase().includes('duplicate'));
-    if (duplicates.size > 0) {
+    if (duplicates.size > 0 && dupSealRule) {
+      const sev = resolveSeverity(dupSealRule, dupSealRule.thresholds);
       breaches.push({
         breached: true,
-        severityLevel: 'high',
+        severityLevel: sev.level,
         processCategory: defCategory,
         message: `Duplicate seal(s) detected: ${Array.from(duplicates).join(', ')}`,
         stageIndex: -1,
@@ -215,8 +219,7 @@ async function evaluateBreaches(
     // easily check here. Skip for now; the workflow already enforces this at scan time.
   }
 
-  // 5. Single-person completion (no independent verification)
-  // If the same employee did all scans, flag it
+  // 5. Single-person completion — only if a matching rule is selected
   const { data: scanData } = await supabase
     .from('scan_records')
     .select('employee_user_id, weight, weight_source, photo_url')
@@ -225,9 +228,8 @@ async function evaluateBreaches(
     const uniqueEmployees = new Set(scanData.map((s) => s.employee_user_id).filter(Boolean));
     if (uniqueEmployees.size === 1) {
       const singlePersonRule = rules.find((r) => r.rule_type.toLowerCase().includes('single') || r.rule_type.toLowerCase().includes('person'));
-      // Only flag if there's a rule for it, or if the process has multiple stages
-      if (singlePersonRule || def.category) {
-        const sev = singlePersonRule ? resolveSeverity(singlePersonRule, singlePersonRule.thresholds) : { level: 'low', category: 'low' };
+      if (singlePersonRule) {
+        const sev = resolveSeverity(singlePersonRule, singlePersonRule.thresholds);
         breaches.push({
           breached: true,
           severityLevel: sev.level,
@@ -240,8 +242,7 @@ async function evaluateBreaches(
     }
   }
 
-  // 5b. Manual weight without photo — discrepancy
-  // Flag any scan where weight was entered manually and no photo was captured
+  // 5b. Manual weight without photo — only if a matching rule is selected
   if (scanData && scanData.length > 0) {
     const manualNoPhoto = scanData.filter(
       (s) => s.weight_source === 'manual' && s.weight != null && !s.photo_url,
@@ -250,17 +251,17 @@ async function evaluateBreaches(
       const manualWeightRule = rules.find(
         (r) => r.rule_type.toLowerCase().includes('manual_weight') || r.rule_type.toLowerCase().includes('manual_weight_no_photo'),
       );
-      const sev = manualWeightRule
-        ? resolveSeverity(manualWeightRule, manualWeightRule.thresholds)
-        : { level: 'medium', category: 'moderate' };
-      breaches.push({
-        breached: true,
-        severityLevel: sev.level,
-        processCategory: defCategory,
-        message: `${manualNoPhoto.length} scan(s) with manually entered weight and no photo captured — treated as discrepancy.`,
-        stageIndex: -1,
-        action: ruleAction(manualWeightRule, 'warn'),
-      });
+      if (manualWeightRule) {
+        const sev = resolveSeverity(manualWeightRule, manualWeightRule.thresholds);
+        breaches.push({
+          breached: true,
+          severityLevel: sev.level,
+          processCategory: defCategory,
+          message: `${manualNoPhoto.length} scan(s) with manually entered weight and no photo captured — treated as discrepancy.`,
+          stageIndex: -1,
+          action: ruleAction(manualWeightRule, 'warn'),
+        });
+      }
     }
   }
 

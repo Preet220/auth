@@ -607,8 +607,14 @@ export function EmployeeProcessPage({ riskManagementEnabled = true }: { riskMana
     }
 
     if (isLast) {
-      // If batch items exist and batch verification hasn't started, trigger it
-      if (batchItems.length > 0 && !endVerificationMode) {
+      // Only trigger end-of-process batch verification if the workflow includes
+      // a verification node with 'batch' in its targets
+      const hasBatchVerificationNode = workflow.nodes.some(
+        (n) => n.type === 'verification' &&
+        ((n.config.verification_targets as string[]) ?? []).includes('batch'),
+      );
+
+      if (batchItems.length > 0 && hasBatchVerificationNode && !endVerificationMode) {
         setEndVerificationMode(true);
         initBatchVerifications();
         setMsg({ type: 'success', text: 'Please verify all batch items by re-scanning QR and re-weighing each item before completing.' });
