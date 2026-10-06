@@ -143,6 +143,7 @@ export function QrCodesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [formFields, setFormFields] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState('');
 
   // Seal batch creation state
   const [sealCreateMode, setSealCreateMode] = useState<'individual' | 'batch'>('individual');
@@ -234,6 +235,31 @@ export function QrCodesPage() {
     setSealBatchLast('');
     setSealBatchResult(null);
     setSealCreateMode('individual');
+    setFormError('');
+  };
+
+  const getQrHeading = (type: string, d: Record<string, unknown>): string => {
+    if (type === 'checkpoint') return (d.name as string) ?? '';
+    if (type === 'item') return (d.item_type as string) ?? '';
+    if (type === 'trolley') return (d.trolley_id as string) ?? '';
+    if (type === 'seal') return (d.seal_serial as string) ?? '';
+    if (d.label) return d.label as string;
+    const def = customTypeDefs[type];
+    if (def && def.fields && def.fields.length > 0) {
+      const val = d[def.fields[0].key] as string | undefined;
+      if (val) return val;
+    }
+    return '';
+  };
+
+  const checkDuplicateHeading = (type: string, heading: string): boolean => {
+    if (!heading) return false;
+    const lower = heading.toLowerCase();
+    return records.some((r) => {
+      if (r.type !== type) return false;
+      const existingHeading = getQrHeading(r.type, r.details ?? {});
+      return existingHeading.toLowerCase() === lower;
+    });
   };
 
   const getFormValue = (key: string) => formFields[key] ?? '';
@@ -244,6 +270,7 @@ export function QrCodesPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
+    setFormError('');
 
     const prefix = TYPE_META[activeTab as PredefinedType]?.prefix ?? activeTab.toUpperCase().slice(0, 4);
     const code = activeTab === 'checkpoint' ? generateCheckpointCode() : generateCode(prefix);
@@ -252,26 +279,59 @@ export function QrCodesPage() {
 
     if (activeTab === 'checkpoint') {
       if (!getFormValue('name').trim()) { setCreating(false); return; }
+      const heading = getFormValue('name').trim();
+      if (checkDuplicateHeading('checkpoint', heading)) {
+        setFormError(`A checkpoint named "${heading}" already exists. Delete the existing one first or use a different name.`);
+        setCreating(false);
+        return;
+      }
       details = {
-        name: getFormValue('name').trim(),
+        name: heading,
         location: getFormValue('location').trim() || null,
         description: getFormValue('description').trim() || null,
       };
     } else if (activeTab === 'item') {
       if (!getFormValue('item_type').trim()) { setCreating(false); return; }
-      details = { item_type: getFormValue('item_type').trim() };
+      const heading = getFormValue('item_type').trim();
+      if (checkDuplicateHeading('item', heading)) {
+        setFormError(`An item named "${heading}" already exists. Delete the existing one first or use a different name.`);
+        setCreating(false);
+        return;
+      }
+      details = { item_type: heading };
     } else if (activeTab === 'trolley') {
       if (!getFormValue('trolley_id').trim()) { setCreating(false); return; }
+      const heading = getFormValue('trolley_id').trim();
+      if (checkDuplicateHeading('trolley', heading)) {
+        setFormError(`A trolley named "${heading}" already exists. Delete the existing one first or use a different name.`);
+        setCreating(false);
+        return;
+      }
       details = {
-        trolley_id: getFormValue('trolley_id').trim(),
+        trolley_id: heading,
         checkpoint_name: getFormValue('checkpoint_name').trim() || null,
       };
     } else if (activeTab === 'seal') {
       if (sealCreateMode === 'batch') { setCreating(false); return; }
       if (!getFormValue('seal_serial').trim()) { setCreating(false); return; }
-      details = { seal_serial: getFormValue('seal_serial').trim() };
+      const heading = getFormValue('seal_serial').trim();
+      if (checkDuplicateHeading('seal', heading)) {
+        setFormError(`A seal with serial "${heading}" already exists. Delete the existing one first or use a different serial.`);
+        setCreating(false);
+        return;
+      }
+      details = { seal_serial: heading };
     } else {
       details = { ...formFields };
+      const def = customTypeDefs[activeTab];
+      if (def && def.fields && def.fields.length > 0) {
+        const heading = (details[def.fields[0].key] as string) ?? '';
+        if (heading && checkDuplicateHeading(activeTab, heading)) {
+          setFormError(`A ${def.label} with "${heading}" already exists. Delete the existing one first or use a different value.`);
+          setCreating(false);
+          return;
+        }
+      }
     }
 
     const { data, error } = await supabase
@@ -536,6 +596,39 @@ export function QrCodesPage() {
         actor_id: appUser?.id ?? '', actor_email: appUser?.email ?? '', actor_role: appUser?.role ?? 'admin',
         action: 'qr_code_regenerated', details: { type: rec.type, old_value: rec.value, new_value: newValue },
       });
+
+      // Update all process definitions whose workflow references the old QR value
+      try {
+        const { data: procDefs } = await supabase
+          .from('process_definitions')
+          .select('id, name, workflow');
+
+        if (procDefs) {
+          for (const def of procDefs) {
+            const wf = def.workflow as { nodes?: Array<Record<string, unknown>>; edges?: unknown[] } | null;
+            if (!wf || !wf.nodes) continue;
+
+            let modified = false;
+            const updatedNodes = wf.nodes.map((node) => {
+              if (node.qr_value === rec.value) {
+                modified = true;
+                return { ...node, qr_value: newValue };
+              }
+              return node;
+            });
+
+            if (modified) {
+              const updatedWorkflow = { ...wf, nodes: updatedNodes };
+              await supabase
+                .from('process_definitions')
+                .update({ workflow: updatedWorkflow })
+                .eq('id', def.id);
+            }
+          }
+        }
+      } catch {
+        // Non-critical — the QR value was still updated in qr_codes
+      }
     }
     setRegeneratingId(null);
   };
@@ -874,6 +967,9 @@ export function QrCodesPage() {
                 </button>
               </div>
             </form>
+            {formError && (
+              <p className="mt-3 rounded-lg bg-error-500/10 px-3 py-2 text-sm text-error-500">{formError}</p>
+            )}
             <p className="mt-4 text-center text-xs text-[var(--text-subtle)]">A unique QR code will be generated automatically.</p>
           </div>
         </div>

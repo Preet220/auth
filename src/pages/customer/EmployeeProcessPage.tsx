@@ -164,7 +164,7 @@ export function EmployeeProcessPage({ riskManagementEnabled = true }: { riskMana
       supabase.from('process_runs')
         .select('id, process_definition_id, status, current_node_id, completed_node_ids, started_at, batch_items, start_total_weight, end_total_weight, reconciliation_result, trolley_qr_value, batch_photo_url')
         .eq('status', 'in_progress')
-        .eq('employee_id', appUser?.id ?? '')
+        .eq('employee_id', appUser?.employeeId ?? '')
         .order('started_at', { ascending: false }),
     ]);
     setProcessDefs((defData as ProcessDefinitionLite[]) ?? []);
@@ -261,6 +261,22 @@ export function EmployeeProcessPage({ riskManagementEnabled = true }: { riskMana
       setActiveDef(def);
       setBatchItems(run.batch_items ?? []);
       setMsg(null);
+      setEndVerificationMode(false);
+      setBatchVerifications({});
+      setVerificationScans({});
+      setVerificationPhoto('');
+      setBatchVerifyTargetQr(null);
+      setReconciliation(null);
+      setQrValue('');
+      setWeight('');
+      setPhotoUrl('');
+      setSealQrValue('');
+      setTrolleyQrValue(run.trolley_qr_value ?? '');
+      setBatchPhotoUrl(run.batch_photo_url ?? '');
+      setConditionAnswer(null);
+      setQrValidationError('');
+      setCustomFieldValues({});
+      setCustomFieldPhotos({});
     }
   };
 
