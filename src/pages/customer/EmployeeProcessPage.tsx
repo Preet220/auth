@@ -1302,8 +1302,8 @@ export function EmployeeProcessPage({ riskManagementEnabled = true }: { riskMana
                     <div className="relative flex-1">
                       <Scale className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-subtle)]" />
                       <input
-                        type="number"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={weight}
                         onChange={(e) => { setWeight(e.target.value); setWeightSource('manual'); }}
                         placeholder="Enter weight"
@@ -1357,8 +1357,8 @@ export function EmployeeProcessPage({ riskManagementEnabled = true }: { riskMana
                     <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">Weight (kg)</label>
                     <div className="flex gap-2">
                       <input
-                        type="number"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={weight}
                         onChange={(e) => { setWeight(e.target.value); setWeightSource('manual'); }}
                         placeholder="Enter weight"
@@ -1582,8 +1582,8 @@ export function EmployeeProcessPage({ riskManagementEnabled = true }: { riskMana
                           <div className="relative flex-1">
                             <Scale className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-subtle)]" />
                             <input
-                              type="number"
-                              step="0.01"
+                              type="text"
+                              inputMode="decimal"
                               value={weight}
                               onChange={(e) => { setWeight(e.target.value); setWeightSource('manual'); }}
                               placeholder="Enter weight"
@@ -1884,8 +1884,8 @@ export function EmployeeProcessPage({ riskManagementEnabled = true }: { riskMana
                             ) : (
                               <div className="flex gap-1.5">
                                 <input
-                                  type="number"
-                                  step="0.01"
+                                  type="text"
+                                  inputMode="decimal"
                                   placeholder="Weight"
                                   disabled={!v.qr_verified}
                                   value={v.verified_weight}

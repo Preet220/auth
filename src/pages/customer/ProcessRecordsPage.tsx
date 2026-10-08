@@ -120,6 +120,7 @@ export function ProcessRecordsPage({ riskManagementEnabled = true }: { riskManag
 
   const buildExportData = () =>
     filtered.map((r) => ({
+      'Run ID': r.id,
       'Process Name': definitions[r.process_definition_id]?.name ?? 'Unknown',
       'Employee': r.employee_name ?? '',
       'Employee ID': r.employee_id ?? '',
@@ -128,12 +129,23 @@ export function ProcessRecordsPage({ riskManagementEnabled = true }: { riskManag
       'Completed At': r.completed_at ? formatDateTime(r.completed_at) : '',
       'Start Weight (kg)': r.start_total_weight != null ? r.start_total_weight : '',
       'End Weight (kg)': r.end_total_weight != null ? r.end_total_weight : '',
+      'Weight Delta (kg)': (r.start_total_weight != null && r.end_total_weight != null)
+        ? Number((r.end_total_weight - r.start_total_weight).toFixed(2))
+        : '',
       'Reconciliation Result': r.reconciliation_result && riskManagementEnabled
         ? (typeof r.reconciliation_result === 'string'
             ? r.reconciliation_result
             : (r.reconciliation_result as Record<string, unknown>).matched
               ? 'matched'
               : `mismatch (${Number((r.reconciliation_result as Record<string, unknown>).delta).toFixed(2)})`)
+        : '',
+      'Trolley QR': r.trolley_qr_value ?? '',
+      'Batch Photo URL': r.batch_photo_url ?? '',
+      'Batch Items Count': r.batch_items?.length ?? 0,
+      'Batch Items Detail': r.batch_items && r.batch_items.length > 0
+        ? r.batch_items.map((item) =>
+            `[QR: ${item.qr_value ?? 'N/A'}, Start: ${item.start_weight ?? item.weight ?? 'N/A'} kg, End: ${item.end_weight ?? 'N/A'} kg, Source: ${item.weight_source ?? 'N/A'}]`
+          ).join('; ')
         : '',
     }));
 

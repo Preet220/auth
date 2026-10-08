@@ -411,8 +411,8 @@ export function WeightReader({ onRead, onClose }: Props) {
                 <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">Or enter weight manually:</label>
                 <div className="flex gap-2">
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={manualWeight}
                     onChange={(e) => setManualWeight(e.target.value)}
                     placeholder="Enter weight in kg"
@@ -542,8 +542,8 @@ export function WeightReader({ onRead, onClose }: Props) {
                 <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">Or enter weight manually:</label>
                 <div className="flex gap-2">
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={manualWeight}
                     onChange={(e) => setManualWeight(e.target.value)}
                     placeholder="Enter weight in kg"

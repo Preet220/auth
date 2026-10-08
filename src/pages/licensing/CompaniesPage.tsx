@@ -43,6 +43,9 @@ export function CompaniesPage() {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editTarget, setEditTarget] = useState<Company | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Form state
   const [fName, setFName] = useState('');
@@ -146,6 +149,21 @@ export function CompaniesPage() {
     setFDuration(monthsLeft);
   };
 
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError('');
+    const { error } = await supabase.rpc('delete_company', { p_company_id: deleteTarget.id });
+    if (error) {
+      setDeleteError(error.message || 'Failed to delete company. Please try again.');
+      setDeleting(false);
+      return;
+    }
+    setCompanies((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+    setDeleteTarget(null);
+    setDeleting(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -242,6 +260,9 @@ export function CompaniesPage() {
                             <RefreshCw className="h-4 w-4" />
                           </button>
                         )}
+                        <button onClick={() => { setDeleteTarget(c); setDeleteError(''); }} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-error-500/10 hover:text-error-500" title="Delete company">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -327,6 +348,47 @@ export function CompaniesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !deleting && setDeleteTarget(null)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-xl">
+            <div className="flex flex-col items-center text-center">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-error-500/10">
+                <AlertTriangle className="h-6 w-6 text-error-500" />
+              </div>
+              <h3 className="text-lg font-semibold text-[var(--text)]">Delete {deleteTarget.company_name}?</h3>
+              <p className="mt-1.5 text-sm text-[var(--text-muted)]">
+                This will permanently delete the company and <strong className="text-[var(--text)]">all related data</strong>:
+                admins, employees, process definitions, process runs, scan records, QR codes,
+                seals, risk rules, risk alerts, activity logs, and all associated user accounts.
+                This action cannot be undone.
+              </p>
+              {deleteError && (
+                <p className="mt-3 w-full rounded-lg bg-error-500/10 px-3 py-2 text-sm text-error-500">{deleteError}</p>
+              )}
+              <div className="mt-6 flex w-full gap-3">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deleting}
+                  className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 text-sm font-medium text-[var(--text)] hover:bg-[var(--surface-hover)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  disabled={deleting}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-error-500 py-2.5 text-sm font-semibold text-white hover:bg-error-600 disabled:opacity-50"
+                >
+                  {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  Delete everything
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

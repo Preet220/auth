@@ -194,7 +194,7 @@ export function ScansPage() {
       'Manual Weight': s.weight_source === 'manual' ? 'Yes' : 'No',
       'Photo URL': s.photo_url ?? '',
       'Process Run ID': s.process_run_id ?? '',
-      'Timestamp': s.created_at,
+      'Timestamp': formatDateTime(s.created_at),
     }));
 
   const handleExportCsv = () => {

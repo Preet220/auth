@@ -24,8 +24,7 @@ export function CustomerActivityPage() {
     const { data } = await supabase
       .from('customer_activity_logs')
       .select('*')
-      .order('created_at', { ascending: false })
-      .limit(200);
+      .order('created_at', { ascending: false });
     setLogs(data ?? []);
     setLoading(false);
   }, []);
