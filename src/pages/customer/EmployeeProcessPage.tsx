@@ -675,9 +675,10 @@ export function EmployeeProcessPage({ riskManagementEnabled = true }: { riskMana
         updates.end_total_weight = endTotal;
         updates.reconciliation_result = { start_total: startTotal, end_total: endTotal, delta, matched, item_discrepancies: itemDiscrepancies };
 
-        // Always show reconciliation to the employee — weight discrepancies
-        // are a basic data-integrity check, not just a risk-management feature
-        setReconciliation({ startTotal, endTotal, delta, matched });
+        // Only show reconciliation to employee if risk toggle is enabled
+        if (riskManagementEnabled) {
+          setReconciliation({ startTotal, endTotal, delta, matched });
+        }
       }
 
       // Mark all seals as used — look up seal_serial from qr_codes details, then update seals table
@@ -753,11 +754,6 @@ export function EmployeeProcessPage({ riskManagementEnabled = true }: { riskMana
           setMsg({
             type: 'success',
             text: `Process completed. ${alertResult.individualCount} risk alert(s) generated for administrator review.`,
-          });
-        } else if (reconciliation && !reconciliation.matched) {
-          setMsg({
-            type: 'error',
-            text: `Process completed but weight discrepancy detected: ${reconciliation.delta > 0 ? '+' : ''}${reconciliation.delta.toFixed(2)} kg difference between start and end weights. Please review the reconciliation details.`,
           });
         } else {
           setMsg({ type: 'success', text: 'Process completed successfully!' });

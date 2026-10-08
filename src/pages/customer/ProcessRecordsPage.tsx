@@ -476,6 +476,24 @@ export function ProcessRecordsPage({ riskManagementEnabled = true }: { riskManag
                       </div>
                     </div>
 
+                    {/* Weight discrepancy flag */}
+                    {r.reconciliation_result &&
+                      !(typeof r.reconciliation_result === 'string'
+                        ? r.reconciliation_result
+                        : (r.reconciliation_result as Record<string, unknown>).matched) && (
+                      <div className="mt-3 flex items-center gap-2 rounded-lg border border-error-500/30 bg-error-500/5 px-4 py-3">
+                        <AlertTriangle className="h-5 w-5 shrink-0 text-error-500" />
+                        <div>
+                          <p className="text-sm font-semibold text-error-500">Weight Discrepancy Flagged</p>
+                          <p className="text-xs text-[var(--text-muted)]">
+                            End weight does not match start weight
+                            {delta != null && <> — difference of {delta > 0 ? '+' : ''}{delta.toFixed(2)} kg</>}.
+                            Review batch items below for details.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Trolley QR and batch photo */}
                     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                       {r.trolley_qr_value && (
@@ -524,7 +542,14 @@ export function ProcessRecordsPage({ riskManagementEnabled = true }: { riskManag
                                 return (
                                   <tr key={item.id ?? idx} className="text-[var(--text)]">
                                     <td className="px-3 py-2 font-mono text-xs">
-                                      {item.qr_value ?? item.item_type ?? `Item ${idx + 1}`}
+                                      <div className="flex items-center gap-1.5">
+                                        {item.qr_value ?? item.item_type ?? `Item ${idx + 1}`}
+                                        {delta != null && Math.abs(delta) > 0.01 && (
+                                          <span className="inline-flex items-center rounded-full bg-error-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-error-500">
+                                            FLAGGED
+                                          </span>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="px-3 py-2">
                                       {sw != null ? (
