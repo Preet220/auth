@@ -644,21 +644,40 @@ export function EmployeeProcessPage({ riskManagementEnabled = true }: { riskMana
 
       // Compute reconciliation using verified weights if available
       if (batchItems.length > 0) {
-        const endTotal = batchItems.reduce((s, b) => {
+        // Update each batch item with its end weight and source from verification
+        const updatedBatchItems = batchItems.map((b) => {
           const verified = batchVerifications[b.qr_value];
-          return s + (verified?.weight_verified && verified.verified_weight ? parseFloat(verified.verified_weight) : b.start_weight || 0);
-        }, 0);
-        const startTotal = batchItems.reduce((s, b) => s + (b.start_weight || 0), 0);
+          if (verified?.weight_verified && verified.verified_weight) {
+            return {
+              ...b,
+              end_weight: parseFloat(verified.verified_weight),
+              end_weight_source: verified.verified_weight_source as 'auto' | 'manual',
+            };
+          }
+          return b;
+        });
+
+        const endTotal = updatedBatchItems.reduce((s, b) => s + (b.end_weight ?? (b.start_weight || 0)), 0);
+        const startTotal = updatedBatchItems.reduce((s, b) => s + (b.start_weight || 0), 0);
         const delta = endTotal - startTotal;
         const matched = Math.abs(delta) < 0.01;
 
-        updates.end_total_weight = endTotal;
-        updates.reconciliation_result = { start_total: startTotal, end_total: endTotal, delta, matched };
+        // Per-item discrepancy details for risk rules and records
+        const itemDiscrepancies = updatedBatchItems.map((b) => ({
+          qr_value: b.qr_value,
+          start_weight: b.start_weight,
+          end_weight: b.end_weight,
+          weight_delta: b.end_weight !== null ? b.end_weight - b.start_weight : 0,
+          weight_matched: b.end_weight !== null && Math.abs(b.end_weight - b.start_weight) < 0.01,
+        }));
 
-        // Only show reconciliation to employee if risk toggle is enabled
-        if (riskManagementEnabled) {
-          setReconciliation({ startTotal, endTotal, delta, matched });
-        }
+        updates.batch_items = updatedBatchItems;
+        updates.end_total_weight = endTotal;
+        updates.reconciliation_result = { start_total: startTotal, end_total: endTotal, delta, matched, item_discrepancies: itemDiscrepancies };
+
+        // Always show reconciliation to the employee — weight discrepancies
+        // are a basic data-integrity check, not just a risk-management feature
+        setReconciliation({ startTotal, endTotal, delta, matched });
       }
 
       // Mark all seals as used — look up seal_serial from qr_codes details, then update seals table
@@ -734,6 +753,11 @@ export function EmployeeProcessPage({ riskManagementEnabled = true }: { riskMana
           setMsg({
             type: 'success',
             text: `Process completed. ${alertResult.individualCount} risk alert(s) generated for administrator review.`,
+          });
+        } else if (reconciliation && !reconciliation.matched) {
+          setMsg({
+            type: 'error',
+            text: `Process completed but weight discrepancy detected: ${reconciliation.delta > 0 ? '+' : ''}${reconciliation.delta.toFixed(2)} kg difference between start and end weights. Please review the reconciliation details.`,
           });
         } else {
           setMsg({ type: 'success', text: 'Process completed successfully!' });
@@ -834,7 +858,13 @@ export function EmployeeProcessPage({ riskManagementEnabled = true }: { riskMana
       : currentNode?.type === 'stage' ? 'checkpoint'
       : currentNode?.type === 'verification' ? 'trolley'
       : (currentNode?.config.qr_type as string) ?? 'item';
-    const result = await validateQrCode(value, expectedType);
+    // For seal_verify nodes (or qr_scan nodes scanning a seal), use
+    // validateSealQr which checks both qr_codes and seals tables — seals
+    // uploaded via the Seals tab are only in the seals table, not qr_codes.
+    const isSealScan = currentNode?.type === 'seal_verify' || expectedType === 'seal';
+    const result = isSealScan
+      ? await validateSealQr(value)
+      : await validateQrCode(value, expectedType);
     if (!result.valid) {
       setQrValidationError(result.error);
       return;

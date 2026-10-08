@@ -132,7 +132,7 @@ export function ProcessRecordsPage({ riskManagementEnabled = true }: { riskManag
       'Weight Delta (kg)': (r.start_total_weight != null && r.end_total_weight != null)
         ? Number((r.end_total_weight - r.start_total_weight).toFixed(2))
         : '',
-      'Reconciliation Result': r.reconciliation_result && riskManagementEnabled
+      'Reconciliation Result': r.reconciliation_result
         ? (typeof r.reconciliation_result === 'string'
             ? r.reconciliation_result
             : (r.reconciliation_result as Record<string, unknown>).matched
@@ -403,7 +403,7 @@ export function ProcessRecordsPage({ riskManagementEnabled = true }: { riskManag
                       {r.completed_at && <span>Completed: {formatDateTime(r.completed_at)}</span>}
                     </div>
                   </div>
-                  {r.reconciliation_result && riskManagementEnabled && (
+                  {r.reconciliation_result && (
                     <span
                       className={`hidden shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline ${
                         (typeof r.reconciliation_result === 'string'
@@ -433,7 +433,6 @@ export function ProcessRecordsPage({ riskManagementEnabled = true }: { riskManag
                         <Trash2 className="h-3.5 w-3.5" /> Delete record
                       </button>
                     </div>
-                    {riskManagementEnabled && (
                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                       <div className="rounded-lg bg-[var(--surface-hover)] p-3">
                         <p className="text-xs text-[var(--text-subtle)]">Start Weight</p>
@@ -476,7 +475,6 @@ export function ProcessRecordsPage({ riskManagementEnabled = true }: { riskManag
                         </p>
                       </div>
                     </div>
-                    )}
 
                     {/* Trolley QR and batch photo */}
                     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
